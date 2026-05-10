@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Medieval Economy Engine Test</title>
+    <style>
+        body { font-family: monospace; background: #1e1e1e; color: #d4d4d4; padding: 20px; line-height: 1.4; }
+        #output { white-space: pre-wrap; }
+        .log-year { color: #569cd6; font-weight: bold; }
+        .log-depart { color: #dcdcaa; } /* Yellow for departing */
+        .log-arrive { color: #4ec9b0; font-weight: bold; } /* Green for arriving */
+        .log-starve { color: #f44747; } /* Red for starvation */
+    </style>
+</head>
+<body>
+    <h1>Economy Engine - Caravan Simulation</h1>
+    <div id="output">Initializing Engine...</div>
+
+    <script type="module">
+        import { EconomyEngine, Settlement, MedievalPreset } from './index.js';
+
+        const output = document.getElementById('output');
+        const log = (msg) => { output.innerHTML += msg + '\n'; };
+        output.innerHTML = '';
+
+        // 1. Initialize Engine (Low caravan cost so merchants are willing to travel)
+        const engine = new EconomyEngine({ seed: 123, caravanCostPerDistance: 0.01 });
+        MedievalPreset.apply(engine);
+
+        // 2. Setup Settlements
+        const london = new Settlement('London', { burghers: 500, nobles: 50 }, null, engine.registry);
+        london.inventory.grain = 1000;
+        const york = new Settlement('York', { peasants: 1000 }, { timber: 2.0, grain: 2.0, fish: 1.5 }, engine.registry);
+        
+        engine.addSettlement(london).addSettlement(york);
+        engine.addRoad('London', 'York', 50);
+
+        // 3. Listen to the new Caravan Events!
+        engine.on('yearStart', ({ year }) => log(`\n<span class="log-year">=== Year ${year} ===</span>`));
+        
+        engine.on('caravanDeparted', (data) => {
+            log(`<span class="log-depart">📦 Departed: Caravan left ${data.source.id} carrying ${data.amount} ${data.commodityId} to ${data.target.id}...</span>`);
+        });
+
+        engine.on('caravanArrived', (data) => {
+            log(`<span class="log-arrive">💰 Arrived: Caravan reached ${data.target.id}! Sold ${data.caravan.commodityId} for ${data.finalValue.toFixed(2)} gold.</span>`);
+        });
+
+        engine.on('populationMigrated', (data) => {
+            log(`<span style="color:#c586c0">🚶‍♂️ Migration: ${data.amount} ${data.popClass} fled from ${data.source.id} to ${data.target.id} seeking a better life!</span>`);
+        });
+
+        // Optional: Listen to starvation to see London panic while waiting!
+        engine.on('populationStarved', (data) => {
+            log(`<span class="log-starve">⚠️ Warning: ${data.settlement.id} is starving! Shortfall: ${(data.starvationRate * 100).toFixed(1)}%</span>`);
+        });
+
+        // 4. Run Simulation for 10 Years (Ticks)
+        // We run it longer so the caravan has time to travel the 150 distance!
+        log("Starting Simulation...\n");
+        for (let i = 0; i < 10; i++) {
+            engine.tick(1.0); 
+        }
+        
+        log("\n<span class=\"log-year\">=== Simulation Complete. Final State ===</span>");
+        log(JSON.stringify(engine.exportState(), null, 2));
+    </script>
+</body>
+</html>
