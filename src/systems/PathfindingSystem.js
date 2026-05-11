@@ -10,9 +10,12 @@ export class PathfindingSystem {
     constructor(engine) {
         this.engine = engine;
         this.pathCache = new Map(); 
+        this.engine.on('topologyChanged', () => {
+            this.invalidateCache();
+        });
     }
 
-    clearCache() {
+    invalidateCache() {
         this.pathCache.clear();
     }
 
