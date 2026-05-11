@@ -23,10 +23,14 @@ export class EconomyEngine extends EventEmitter {
         this.network = new Map();
         this.rng = new SeededRandom(seed);
         this.caravans = new Set();
+
+        // Deterministic monotonic caravan ID sequence.
+        // Avoids real-world time and preserves replay consistency.
+        this.caravanCounter = 0;
         
         this.globalClimateModifier = 1.0;
         this.caravanCostPerDistance = caravanCostPerDistance;
-        this.maxTradeRange = maxTradeRange; // Stored config
+        this.maxTradeRange = maxTradeRange; 
         this.year = 0;
         this._accumulatedTime = 0;
 
@@ -79,6 +83,7 @@ export class EconomyEngine extends EventEmitter {
             year: this.year,
             climate: this.globalClimateModifier,
             rngSeed: this.rng.seed,
+            caravanCounter: this.caravanCounter,
             settlements: Array.from(this.settlements.values()).map(s => s.toJSON()),
             caravans: Array.from(this.caravans).map(c => c.toJSON())
         };

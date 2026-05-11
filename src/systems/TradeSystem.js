@@ -10,16 +10,26 @@ export class TradeSystem {
         this.pathfinder = pathfindingSystem;
         this.needsCacheRebuild = true;
 
-        // Listen for additions of settlements or roads
         this.engine.on('topologyChanged', () => {
             this.needsCacheRebuild = true;
         });
+    }
+
+    getTradeNeighbors(settlement) {
+        if (!settlement.tradeCache) {
+            settlement.tradeCache = {};
+        }
+        if (!settlement.tradeCache.validTargets) {
+            settlement.tradeCache.validTargets = [];
+        }
+        return settlement.tradeCache.validTargets;
     }
 
     rebuildCache() {
         const settlements = Array.from(this.engine.settlements.values());
 
         for (const source of settlements) {
+            if (!source.tradeCache) source.tradeCache = {};
             source.tradeCache.validTargets = [];
 
             for (const target of settlements) {
@@ -27,11 +37,9 @@ export class TradeSystem {
 
                 const pathData = this.pathfinder.findCheapestPath(source.id, target.id);
 
-                // Cull targets that are unreachable or outside the max trade range
                 if (pathData.totalDistance !== Infinity && pathData.totalDistance <= this.engine.maxTradeRange) {
-                    // Cache the target AND the distance to completely remove pathfinding from the tick loop!
                     source.tradeCache.validTargets.push({
-                        target: target,
+                        targetId: target.id, 
                         distance: pathData.totalDistance
                     });
                 }
@@ -42,7 +50,6 @@ export class TradeSystem {
     }
 
     update() {
-        // Only rebuild if the map topology changed
         if (this.needsCacheRebuild) {
             this.rebuildCache();
         }
@@ -51,12 +58,14 @@ export class TradeSystem {
         const settlements = Array.from(this.engine.settlements.values());
 
         for (const source of settlements) {
-            const neighbors = source.tradeCache.validTargets || [];
+            const neighbors = this.getTradeNeighbors(source);
 
-            // Iterate over pre-culled neighbors instead of all settlements
             for (const neighborData of neighbors) {
-                const target = neighborData.target;
-                const distance = neighborData.distance; // Use cached distance!
+                const target = this.engine.settlements.get(neighborData.targetId);
+
+                if (!target) continue;
+
+                const distance = neighborData.distance;
 
                 registry.commodities.forEach((commodity, commodityId) => {
                     const sourcePrice = source.prices[commodityId] || 0;
@@ -65,7 +74,6 @@ export class TradeSystem {
                     const priceDiff = targetPrice - sourcePrice;
                     if (priceDiff <= 0) return; 
 
-                    // Transport cost calculated instantly using cached distance
                     const transportCost = distance * this.engine.caravanCostPerDistance * commodity.weight;
                     const profitMargin = priceDiff - transportCost;
 
@@ -75,8 +83,8 @@ export class TradeSystem {
 
                         if (tradeVolume > 0) {
                             source.inventory[commodityId] -= tradeVolume;
-                            
-                            const caravanId = `cvn_${source.id}_${target.id}_${Date.now()}_${Math.floor(this.engine.rng.next() * 1000)}`;
+                        
+                            const caravanId = `cvn_${this.engine.year}_${source.id}_${target.id}_${this.engine.caravanCounter++}`;
                             
                             const caravan = new Caravan(
                                 caravanId, source.id, target.id, commodityId, tradeVolume, profitMargin, distance
