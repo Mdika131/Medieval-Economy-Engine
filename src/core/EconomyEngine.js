@@ -16,7 +16,7 @@ import { CaravanSystem } from '../systems/CaravanSystem.js';
 import { MigrationSystem } from '../systems/MigrationSystem.js';
 
 export class EconomyEngine extends EventEmitter {
-    constructor({ seed = 42, caravanCostPerDistance = 0.5 } = {}) {
+    constructor({ seed = 42, caravanCostPerDistance = 0.5, maxTradeRange = 500 } = {}) {
         super();
         this.registry = new Registry();
         this.settlements = new Map();
@@ -26,6 +26,7 @@ export class EconomyEngine extends EventEmitter {
         
         this.globalClimateModifier = 1.0;
         this.caravanCostPerDistance = caravanCostPerDistance;
+        this.maxTradeRange = maxTradeRange; // Stored config
         this.year = 0;
         this._accumulatedTime = 0;
 
@@ -43,6 +44,7 @@ export class EconomyEngine extends EventEmitter {
     addSettlement(settlement) {
         this.settlements.set(settlement.id, settlement);
         this.network.set(settlement.id, []);
+        this.emit('topologyChanged'); 
         return this;
     }
 
@@ -50,6 +52,7 @@ export class EconomyEngine extends EventEmitter {
         if (this.network.has(idA) && this.network.has(idB)) {
             this.network.get(idA).push(new TradeRoute(idB, distance));
             this.network.get(idB).push(new TradeRoute(idA, distance));
+            this.emit('topologyChanged'); 
         }
         return this;
     }
@@ -60,7 +63,7 @@ export class EconomyEngine extends EventEmitter {
             this.year++;
             this.emit('yearStart', { engine: this, year: this.year });
             
-            // Loop through independent systems cleanly
+            // Loop through systems in defined order
             for (const system of this.systems) {
                 system.update(this.globalClimateModifier);
             }
@@ -70,7 +73,7 @@ export class EconomyEngine extends EventEmitter {
         }
     }
     
-    // Kept your serialization exactly as it was!
+    // Export the current state of the engine for saving or debugging
     exportState() {
         return {
             year: this.year,
